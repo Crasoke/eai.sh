@@ -1,17 +1,37 @@
 #!/usr/bin/env bash
 
 # EasyArchInstall (eai)
-# change configs
+# change vars
 
-USER_NAME=""
-USER_PASSWORD=""
-HOSTNAME=""
-TIMEZONE="Europe/Berlin"
-LOCALES=("en_US.UTF-8","en_DK.UTF-8")
-VM=false #true or false
+USER_NAME=                              #example: USER_NAME="expert"
+USER_PASSWORD=                          #example: USER_PASSWORD="123456"
+HOSTNAME=                               #example: HOSTNAME="blackrock"
+TIMEZONE=                               #example: TIMEZONE="Europe/Berlin" 
+LOCALES=                                #example: LOCALES=("en_US.UTF-8","en_DK.UTF-8")
+VM=                                     #example: VM=false
+DEVICE=                                 #example: DEVICE=mmblk0
+
+function check() {
+    echo "Username: $USER_NAME"
+    echo "User-Password: $USER_PASSWORD"
+    echo "Hostname: $HOSTNAME"
+    echo "Timezone: $TIMEZONE"
+    echo "Locales: $LOCALES"
+    echo "VM: $VM"
+    read "everyting correct? [y/N]" CHECK
+    if [ "$CHECK" !== "y" ]; then
+        exit 0
+    fi
+    echo "see ya on the other side...."
+}
 
 function partitioning() {
-    #TODO
+    sgdisk --zap-all /dev/$DEVICE
+    sgdisk -o /dev/$DEVICE
+    sgdisk -n 1:0:512M /dev/$DEVICE
+    sgdisk -t 1:ef00 /dev/$DEVICE
+    sgdisk -n 2:0:0 /dev/$DEVICE
+    sgdisk -t 2:8300 /dev/$DEVICE
 }
 
 function encryption() {
@@ -40,6 +60,15 @@ function base() {
     fi
 
     arch-chroot /mnt systemctl enable --now systemd-timesyncd.service
+}
+
+function bootloader() {
+    arch-chroot /mnt blkid -s UUID -o value /dev/nvme0n1p2 > /boot/loader/entries/arch-uefi.conf
+    echo "title Arch Linux\nlinux /vmlinuz-linux\ninitrd /intel-ucode.img\ninitrd /initramfs-linux.img\noptions cryptdevice=UUID=6b220a55-ebe1-4c95-8804-4227f4e13c8a:cryptroot root=/dev/mapper/cryptroot rw" > /boot/loader/entries/arch-uefi.conf
+    echo "title Arch Linux (fallback initramfs)\nlinux /vmlinuz-linux\ninitrd /intel-ucode.img\ninitrd /initramfs-linux-fallback.img\noptions cryptdevice=UUID=6b220a55-ebe1-4c95-8804-4227f4e13c8a:cryptroot root=/dev/mapper/cryptroot rw" > /boot/loader/entries/arch-uefi-fallback.conf
+    #TODO check command
+    echo "default arch-uefi.conf\ntimeout 3" > /boot/loader/loader.conf
+    arch-chroot /mnt bootctl update
 }
 
 function create_user() {
@@ -90,5 +119,12 @@ function egpu() {
 }
 
 function main() {
-    #TODO everything
+    check()
+    partitioning()
+    if [ ! $VM ]; then
+        encryption()
+    fi
+    base()
+
+
 }
